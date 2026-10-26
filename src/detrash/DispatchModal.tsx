@@ -3,10 +3,11 @@
  * apply the seal, then post GI. The forklift loads after posting.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
+import { useFitCamera } from '../scene/fitCamera';
 import { CircleCheck, Lock, ScanBarcode, Send, ShieldAlert, Truck, X } from 'lucide-react';
 import { MODELS } from '../game/content';
 import { canShip, giReady, giStep, machineById, shipOut, shipmentById, truckById } from '../game/sim';
@@ -59,17 +60,9 @@ function Target({ pos, size, tex, step, sh, feedback, done }: {
   );
 }
 
+const FIT_T = Math.tan(THREE.MathUtils.degToRad(19));
 function FitCamera() {
-  const camera = useThree((s) => s.camera);
-  const size = useThree((s) => s.size);
-  const controls = useThree((s) => s.controls) as unknown as { update?: () => void } | null;
-  useEffect(() => {
-    const t = Math.tan(THREE.MathUtils.degToRad(19));
-    const dist = Math.max(2.9 / t, 3.1 / (t * (size.width / size.height)));
-    camera.position.copy(new THREE.Vector3(2.6, 1.7, 4.2).normalize().multiplyScalar(dist)).add(new THREE.Vector3(0, 1.3, 0));
-    camera.lookAt(0, 1.3, 0);
-    controls?.update?.();
-  }, [camera, size.width, size.height, controls]);
+  useFitCamera([2.6, 1.7, 4.2], [0, 1.3, 0], (aspect) => Math.max(2.9 / FIT_T, 3.1 / (FIT_T * aspect)));
   return null;
 }
 

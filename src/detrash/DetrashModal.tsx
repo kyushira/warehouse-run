@@ -3,10 +3,11 @@
  * against the BOM, quarantine anything not on it, post the GR).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
+import { useFitCamera } from '../scene/fitCamera';
 import { ArrowRight, CircleCheck, CircleX, Info, Recycle, ScanBarcode, ShieldAlert, TriangleAlert, X } from 'lucide-react';
 import { MODELS, TUNE } from '../game/content';
 import {
@@ -166,17 +167,9 @@ function ClickPart({ part, kit, feedback }: { part: Part; kit: Kit; feedback: Fe
 }
 
 /** Keep the whole kit in frame for any viewport shape (portrait phones need more distance). */
+const FIT_T = Math.tan(THREE.MathUtils.degToRad(18));
 function FitCamera() {
-  const camera = useThree((s) => s.camera);
-  const size = useThree((s) => s.size);
-  const controls = useThree((s) => s.controls) as unknown as { update?: () => void } | null;
-  useEffect(() => {
-    const t = Math.tan(THREE.MathUtils.degToRad(18));
-    const dist = Math.max(1.75 / t, 2.2 / (t * (size.width / size.height)));
-    camera.position.copy(new THREE.Vector3(3.1, 2.8, 3.8).normalize().multiplyScalar(dist)).add(new THREE.Vector3(0.3, 0.1, 0));
-    camera.lookAt(0.3, 0.1, 0);
-    controls?.update?.();
-  }, [camera, size.width, size.height, controls]);
+  useFitCamera([3.1, 2.8, 3.8], [0.3, 0.1, 0], (aspect) => Math.max(1.75 / FIT_T, 2.2 / (FIT_T * aspect)));
   return null;
 }
 
