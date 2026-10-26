@@ -1,14 +1,17 @@
-import { useEffect } from 'react';
-import { DetrashModal } from './detrash/DetrashModal';
-import { DispatchModal } from './detrash/DispatchModal';
+import { Suspense, lazy, useEffect } from 'react';
 import { S } from './game/sim';
 import { openNextKit, togglePause, useGameLoop, useUi } from './game/store';
-import { SceneCanvas } from './scene/SceneCanvas';
 import { SettingsMenu, ShiftBriefing, ShiftReport, TitleScreen, Toasts } from './ui/Chrome';
 import { DesktopHud, MobileHud } from './ui/Hud';
 import { useIsMobile } from './ui/primitives';
 import { TopBar } from './ui/TopBar';
 import { AdminLayer } from './ui/AdminPanel';
+
+// three.js / R3F code is split into separate chunks so the dashboard and title
+// screen paint first; the yard and the 3D modals stream in right after.
+const SceneCanvas = lazy(() => import('./scene/SceneCanvas').then((m) => ({ default: m.SceneCanvas })));
+const DetrashModal = lazy(() => import('./detrash/DetrashModal').then((m) => ({ default: m.DetrashModal })));
+const DispatchModal = lazy(() => import('./detrash/DispatchModal').then((m) => ({ default: m.DispatchModal })));
 
 function useShortcuts() {
   useEffect(() => {
@@ -38,12 +41,16 @@ export default function App() {
   const mobile = useIsMobile();
   return (
     <>
-      <SceneCanvas />
+      <Suspense fallback={<div className="scene" />}>
+        <SceneCanvas />
+      </Suspense>
       <TopBar />
       {mobile ? <MobileHud /> : <DesktopHud />}
       <Toasts />
-      <DetrashModal />
-      <DispatchModal />
+      <Suspense fallback={null}>
+        <DetrashModal />
+        <DispatchModal />
+      </Suspense>
       <SettingsMenu />
       <TitleScreen />
       <ShiftBriefing />

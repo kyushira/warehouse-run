@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { camRef } from './cameraApi';
 import { Entities } from './Entities';
 import { World } from './World';
+import { CANVAS_DPR, IS_TOUCH } from '../ui/primitives';
 
 const { ACTION } = CameraControlsImpl;
 
@@ -86,7 +87,7 @@ export function SceneCanvas() {
       <Canvas
         shadows
         flat
-        dpr={[1, 2]}
+        dpr={CANVAS_DPR}
         orthographic
         camera={{ position: [38, 42, 38], zoom: 18, near: 0.1, far: 600 }}
         gl={{ antialias: true, powerPreference: 'high-performance' }}
@@ -98,7 +99,7 @@ export function SceneCanvas() {
           position={[26, 44, 18]}
           intensity={1.55}
           castShadow
-          shadow-mapSize={[2048, 2048]}
+          shadow-mapSize={IS_TOUCH ? [1024, 1024] : [2048, 2048]}
           shadow-camera-left={-48}
           shadow-camera-right={48}
           shadow-camera-top={40}

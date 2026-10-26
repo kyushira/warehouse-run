@@ -13,7 +13,7 @@ import { canShip, giReady, giStep, machineById, shipOut, shipmentById, truckById
 import type { GiStep, Shipment } from '../game/sim';
 import { closeDispatch, sfx, useSim, useUi } from '../game/store';
 import { dueText, money } from '../ui/format';
-import { Chip } from '../ui/primitives';
+import { CANVAS_DPR, Chip } from '../ui/primitives';
 import { MachineModel, Pallet, TruckModel } from '../scene/models';
 import { FloorFeed } from './DetrashModal';
 import { barcodeTexture, labelTexture, mat } from '../scene/materials';
@@ -173,7 +173,7 @@ export function DispatchModal() {
         <div className="dt-body">
           <div className="dt-view">
             {ok && (
-              <Canvas shadows flat dpr={[1, 2]} camera={{ position: [2.6, 3, 4.2], fov: 38 }}>
+              <Canvas shadows flat dpr={CANVAS_DPR} camera={{ position: [2.6, 3, 4.2], fov: 38 }}>
                 <color attach="background" args={['#eef3fa']} />
                 <hemisphereLight args={['#ffffff', '#b9c6d8', 1.1]} />
                 <directionalLight position={[5, 9, 6]} intensity={1.4} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0005} />

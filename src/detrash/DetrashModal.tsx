@@ -16,7 +16,7 @@ import {
 import type { Kit, Part, Piece, TrashKind } from '../game/sim';
 import { closeKit, openNextKit, sfx, useSim, useUi } from '../game/store';
 import { dueText, money } from '../ui/format';
-import { Bar, Chip, useIsMobile } from '../ui/primitives';
+import { Bar, CANVAS_DPR, Chip, IS_TOUCH, useIsMobile } from '../ui/primitives';
 import { Pallet, PartMesh, PieceGeom, sharedPieceMats } from '../scene/models';
 import type { PieceMats } from '../scene/models';
 import { barcodeTexture, mat } from '../scene/materials';
@@ -357,7 +357,7 @@ export function DetrashModal() {
         </div>
         <div className="dt-body">
           <div className="dt-view">
-            <Canvas shadows flat dpr={[1, 2]} camera={{ position: [3.1, 2.8, 3.8], fov: 36 }}>
+            <Canvas shadows flat dpr={CANVAS_DPR} camera={{ position: [3.1, 2.8, 3.8], fov: 36 }}>
               <color attach="background" args={['#eef3fa']} />
               <hemisphereLight args={['#ffffff', '#b9c6d8', 1.1]} />
               <directionalLight position={[4, 8, 5]} intensity={1.5} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0005} />
@@ -370,7 +370,7 @@ export function DetrashModal() {
                 <CircleCheck size={15} /> GR {kit.grDoc} posted · queued for the next free workcentre
               </div>
             )}
-            <div className="corner">Drag to rotate · scroll to zoom</div>
+            <div className="corner">{IS_TOUCH ? 'Drag to rotate · pinch to zoom' : 'Drag to rotate · scroll to zoom'}</div>
           </div>
           <ErpPanel kit={kit} compact={compact} />
         </div>

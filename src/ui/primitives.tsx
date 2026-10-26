@@ -33,3 +33,8 @@ export function useMedia(q: string) {
 /** Phone layout: narrow portrait, or a short landscape phone (desktop panels would cover the yard). */
 export const MOBILE_QUERY = '(max-width: 819px), (max-height: 520px)';
 export const useIsMobile = () => useMedia(MOBILE_QUERY);
+
+/** Touch devices (phones/tablets): cheaper rendering settings. */
+export const IS_TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+/** Device-pixel-ratio range for R3F canvases: phones are 3x but 1.5x looks the same at a fraction of the fill cost. */
+export const CANVAS_DPR: [number, number] = [1, IS_TOUCH ? 1.5 : 2];
