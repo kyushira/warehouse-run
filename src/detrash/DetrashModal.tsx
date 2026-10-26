@@ -3,11 +3,12 @@
  * against the BOM, quarantine anything not on it, post the GR).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { useFitCamera } from '../scene/fitCamera';
+import { strapsAlong } from './swipe';
 import { ArrowRight, CircleCheck, CircleX, Info, Recycle, ScanBarcode, ShieldAlert, TriangleAlert, X } from 'lucide-react';
 import { MODELS, TUNE } from '../game/content';
 import {
@@ -36,6 +37,92 @@ function cloneMats(): PieceMats {
 
 type Feedback = (text: string, bad: boolean) => void;
 const bump = () => useUi.getState().bump();
+
+/* ------------------------------- swipe to cut ------------------------------ */
+/*
+ * Straps are cut by swiping across them (touch or mouse), not by tapping.
+ * A stroke starts when the pointer goes down on the kit while straps are the
+ * current layer. Window-level pointer moves are queued, and SwipeCutter
+ * raycasts along every queued segment in small steps, so a fast flick still
+ * hits a thin strap even if no single pointer event lands on it.
+ */
+/** pointer travel (px) before a stroke can cut, so a plain tap never cuts */
+const SWIPE_MIN = 14;
+interface Pt { x: number; y: number; t: number }
+const stroke = { active: false, dist: 0, warned: false, queue: [] as Pt[], trail: [] as Pt[], cut: new Set<number>() };
+/** strap meshes on screen, by piece id, with a callback that cuts that strap */
+const straps = new Map<number, { obj: THREE.Object3D; removed: () => boolean; cut: () => 'ok' | 'fail' | 'skip' }>();
+let endStroke: (() => void) | null = null;
+
+function beginStroke(x: number, y: number, onEnd: () => void) {
+  endStroke?.();
+  const p = { x, y, t: performance.now() };
+  Object.assign(stroke, { active: true, dist: 0, warned: false, queue: [p], trail: [p], cut: new Set<number>() });
+  const move = (e: PointerEvent) => {
+    const last = stroke.queue[stroke.queue.length - 1] ?? stroke.trail[stroke.trail.length - 1];
+    const q = { x: e.clientX, y: e.clientY, t: performance.now() };
+    if (last) stroke.dist += Math.hypot(q.x - last.x, q.y - last.y);
+    stroke.queue.push(q);
+    stroke.trail.push(q);
+  };
+  const up = () => endStroke?.();
+  addEventListener('pointermove', move);
+  addEventListener('pointerup', up);
+  addEventListener('pointercancel', up);
+  endStroke = () => {
+    stroke.active = false;
+    removeEventListener('pointermove', move);
+    removeEventListener('pointerup', up);
+    removeEventListener('pointercancel', up);
+    endStroke = null;
+    onEnd();
+  };
+}
+
+/** Inside the Canvas: turns queued stroke segments into strap cuts. */
+function SwipeCutter() {
+  const camera = useThree((s) => s.camera);
+  const gl = useThree((s) => s.gl);
+  const ray = useMemo(() => new THREE.Raycaster(), []);
+  useEffect(() => () => endStroke?.(), []);
+  useFrame(() => {
+    const q = stroke.queue;
+    if (q.length < 2 || stroke.dist < SWIPE_MIN) return;
+    stroke.queue = [q[q.length - 1]];
+    const targets = [...straps.values()].map((s) => s.obj);
+    const ids = strapsAlong(q, gl.domElement.getBoundingClientRect(), camera, targets, (id) => stroke.cut.has(id) || !!straps.get(id)?.removed(), ray);
+    for (const id of ids) {
+      stroke.cut.add(id);
+      if (straps.get(id)?.cut() === 'fail') stroke.warned = true;
+    }
+  });
+  return null;
+}
+
+/** DOM overlay: a short fading slash that follows the swipe. */
+function SwipeTrail() {
+  const svg = useRef<SVGSVGElement>(null);
+  const line = useRef<SVGPolylineElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const draw = () => {
+      raf = requestAnimationFrame(draw);
+      const el = svg.current, pl = line.current;
+      if (!el || !pl) return;
+      const now = performance.now();
+      stroke.trail = stroke.trail.filter((p) => now - p.t < 180);
+      const r = el.getBoundingClientRect();
+      pl.setAttribute('points', stroke.trail.length > 1 ? stroke.trail.map((p) => `${p.x - r.left},${p.y - r.top}`).join(' ') : '');
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    <svg ref={svg} className="swipe-trail" aria-hidden="true">
+      <polyline ref={line} />
+    </svg>
+  );
+}
 
 /* ------------------------------ trash pieces ------------------------------- */
 function TrashPiece({ piece, kit, active, feedback }: { piece: Piece; kit: Kit; active: boolean; feedback: Feedback }) {
@@ -75,19 +162,40 @@ function TrashPiece({ piece, kit, active, feedback }: { piece: Piece; kit: Kit; 
     if (a.t >= 1) setGone(true);
   });
 
-  if (gone) return null;
-  const onClick = (e: ThreeEvent<MouseEvent>) => {
-    if (e.delta > 8 || piece.removed) return;
-    e.stopPropagation();
+  const remove = (quiet = false): 'ok' | 'fail' | 'skip' => {
+    if (piece.removed) return 'skip';
     const res = removePiece(kit.id, piece.id);
     if (res.ok) {
       sfx(SFX_FOR[piece.kind]);
       if (res.layerDone && !res.cleared) sfx('layer');
       bump();
-    } else if (res.hint) {
+      return 'ok';
+    }
+    if (res.hint && !quiet) {
       sfx('deny');
       feedback(res.hint, true);
     }
+    return res.hint ? 'fail' : 'skip';
+  };
+  const removeRef = useRef(remove);
+  removeRef.current = remove;
+  useEffect(() => {
+    if (piece.kind !== 'strap' || !g.current) return;
+    g.current.userData.strapId = piece.id;
+    straps.set(piece.id, { obj: g.current, removed: () => piece.removed, cut: () => removeRef.current(stroke.warned) });
+    return () => { straps.delete(piece.id); };
+  }, [piece.id, piece.kind, gone]);
+
+  if (gone) return null;
+  const onClick = (e: ThreeEvent<MouseEvent>) => {
+    if (e.delta > 8 || piece.removed) return;
+    e.stopPropagation();
+    if (piece.kind === 'strap') {
+      // a tap never cuts: straps need a swipe
+      if (kit.state === 'waiting') feedback('Swipe across the strap to cut it', false);
+      return;
+    }
+    remove();
   };
   return (
     <group
@@ -177,12 +285,23 @@ function KitView({ kit, feedback }: { kit: Kit; feedback: Feedback }) {
   useSim();
   const cur = currentLayer(kit);
   const anyQ = kit.parts.some((p) => p.quarantined);
+  const controls = useThree((s) => s.controls) as unknown as { enabled: boolean } | null;
+  // Pointer down on the kit while straps are the current layer starts a cutting
+  // swipe instead of rotating the view (dragging the empty floor still rotates).
+  const onKitDown = (e: ThreeEvent<PointerEvent>) => {
+    if (kit.state !== 'waiting' || currentLayer(kit) !== 'strap') return;
+    e.stopPropagation();
+    if (controls) controls.enabled = false;
+    beginStroke(e.nativeEvent.clientX, e.nativeEvent.clientY, () => { if (controls) controls.enabled = true; });
+  };
   return (
     <group position={[0, -0.75, 0]}>
+      <SwipeCutter />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.001, 0]} receiveShadow>
         <circleGeometry args={[3.4, 48]} />
         <meshStandardMaterial color="#dbe4f0" />
       </mesh>
+      <group onPointerDown={onKitDown}>
       <Pallet />
       {(kit.state === 'scan' || anyQ) && (
         <group position={[QUAR.x, 0, QUAR.z]}>
@@ -192,6 +311,7 @@ function KitView({ kit, feedback }: { kit: Kit; feedback: Feedback }) {
       )}
       {kit.parts.map((p) => <ClickPart key={p.id} part={p} kit={kit} feedback={feedback} />)}
       {kit.pieces.map((p) => <TrashPiece key={p.id} piece={p} kit={kit} active={!!cur && p.kind === cur} feedback={feedback} />)}
+      </group>
     </group>
   );
 }
@@ -363,6 +483,7 @@ export function DetrashModal() {
                 <CircleCheck size={15} /> GR {kit.grDoc} posted · queued for the next free workcentre
               </div>
             )}
+            <SwipeTrail />
             <div className="corner">{IS_TOUCH ? 'Drag to rotate · pinch to zoom' : 'Drag to rotate · scroll to zoom'}</div>
           </div>
           <ErpPanel kit={kit} compact={compact} />

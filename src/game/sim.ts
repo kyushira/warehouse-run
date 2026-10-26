@@ -47,7 +47,7 @@ export type TrashKind = 'strap' | 'wrap' | 'card' | 'foam';
 export const LAYERS: TrashKind[] = ['strap', 'wrap', 'card', 'foam'];
 export const LAYER_LABEL: Record<TrashKind, string> = { strap: 'Straps', wrap: 'Stretch wrap', card: 'Cardboard', foam: 'Dunnage' };
 export const LAYER_HINT: Record<TrashKind, string> = {
-  strap: 'Cut the yellow straps',
+  strap: 'Swipe across the yellow straps to cut them',
   wrap: 'Peel the stretch wrap bands',
   card: 'Lift the lid, then the sleeve',
   foam: 'Pull the foam dunnage. Don’t touch the parts!',

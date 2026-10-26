@@ -125,7 +125,7 @@ export function SettingsMenu() {
 }
 
 const HOWTO = [
-  { icon: <Scissors size={18} />, t: 'Detrash + scan', d: 'Cut straps, peel wrap, lift cardboard, pull dunnage (don’t touch the parts). Then scan every part into ERP and quarantine wrong ones.' },
+  { icon: <Scissors size={18} />, t: 'Detrash + scan', d: 'Swipe to cut straps, peel wrap, lift cardboard, pull dunnage (don’t touch the parts). Then scan every part into ERP and quarantine wrong ones.' },
   { icon: <Factory size={18} />, t: 'Cells build', d: 'Forklifts feed clean kits to the workcentres, which build machines on their own. Repair breakdowns fast.' },
   { icon: <Truck size={18} />, t: 'Book trucks', d: 'Time it so the truck docks as the machine is staged. Idle trucks charge detention after 25s.' },
   { icon: <Send size={18} />, t: 'Dispatch', d: 'At the dock, scan the serial and trailer, apply the seal and post the goods issue before the due time.' },
