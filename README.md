@@ -1,0 +1,2 @@
+# warehouse-run
+Vibecoded CNC
