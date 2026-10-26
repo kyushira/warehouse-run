@@ -244,3 +244,30 @@ describe('modifiers', () => {
     expect(JSON.stringify(TUNE)).toBe(before);
   });
 });
+
+describe('kit ops sequence numbers', () => {
+  const ALLOWED = [10, 20, 30, 60, 70, 80, 90];
+  it('every kit gets one ops number from the allowed set (never 40 or 50)', () => {
+    const seen = new Set<number>();
+    for (let seed = 1; seed <= 6; seed++) {
+      G.startShift(seed);
+      for (let i = 0; i < 400 && !G.S.over; i++) G.tick(0.5);
+      for (const k of G.S.kits) {
+        expect(ALLOWED).toContain(k.ops);
+        seen.add(k.ops);
+      }
+    }
+    for (let n = 1000; n < 3000; n++) seen.add(G.opsFor(n, 12345));
+    expect([...seen].sort((a, b) => a - b)).toEqual(ALLOWED);
+  });
+  it('is stable for the same seed and kit', () => {
+    expect(G.opsFor(1041, 20261026)).toBe(G.opsFor(1041, 20261026));
+  });
+});
+
+describe('workcentre names', () => {
+  it('are FISE, Centris, MDP in floor order', () => {
+    G.startShift(1);
+    expect(G.S.wcs.map((w) => w.id)).toEqual(['FISE', 'Centris', 'MDP']);
+  });
+});

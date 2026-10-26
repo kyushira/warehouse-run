@@ -14,7 +14,7 @@
  * GR: posting early books unscanned parts as short (expedite wasted); unquarantined wrong parts
  *     reach the workcentre and cost rework.
  */
-import { CARRIERS, CITIES, CUSTOMERS, MODEL_LIST, MODELS, SHIFT_SEC, UPGRADES } from './content';
+import { CARRIERS, CITIES, CUSTOMERS, MODEL_LIST, MODELS, OPS_SEQUENCE, SHIFT_SEC, UPGRADES, WC_NAMES } from './content';
 import type { ModelId, Tune, UpgradeId } from './content';
 import { tuneFor } from './modifiers';
 import type { ModifierId } from './modifiers';
@@ -72,6 +72,8 @@ export interface Kit {
   opRolled: boolean;
   receivedAt: number; startedAt: number;
   bom: BomLine[]; exception: 'none' | 'wrong' | 'short'; po: string; grDoc: string | null; shortage: number; wrongIn: number;
+  /** ops sequence number (one of OPS_SEQUENCE); a label only, it doesn't affect play */
+  ops: number;
 }
 
 export type MachineState = 'building' | 'done' | 'toStage' | 'carried' | 'staged' | 'loading';
@@ -130,7 +132,7 @@ const fresh = (seed: number, mods: ModifierId[] = [], daily = false, tune = tune
   revenue: 0, costs: 0, spent: 0, startBudget: tune.startBudget,
   shipments: [], kits: [], machines: [], trucks: [], tasks: [],
   wcs: WC_POS.map((_, i) => ({
-    id: `WC-${i + 1}`, idx: i, unlocked: i < 2, state: 'idle', down: false, repairT: 0, broke: false,
+    id: WC_NAMES[i] ?? `WC-${i + 1}`, idx: i, unlocked: i < 2, state: 'idle', down: false, repairT: 0, broke: false,
     kitId: null, machineId: null, model: null, progress: 0, buildSec: 1,
   })),
   forklifts: [0, 1].map((i) => makeForklift(i)),
@@ -266,6 +268,16 @@ function topAt(parts: Part[], x: number, z: number) {
   return y;
 }
 
+/**
+ * Ops number for kit #n: hashed from the shift seed and kit number, so it is
+ * stable for a seed (daily challenge) without drawing from S.rng, which would
+ * change every order that follows.
+ */
+export function opsFor(n: number, seed = S.seed): number {
+  const h = Math.imul((n ^ seed) >>> 0, 2654435761) >>> 0;
+  return OPS_SEQUENCE[((h ^ (h >>> 16)) >>> 0) % OPS_SEQUENCE.length];
+}
+
 function makeKit(shipmentId: string, model: ModelId): Kit {
   let parts: Part[] = PART_SETS[model].map((s, i) => ({
     id: i, shape: s[0], x: s[1], y: s[2], z: s[3], w: s[4], h: s[5], d: s[6], tone: s[7], axis: s[8], damaged: false,
@@ -289,8 +301,9 @@ function makeKit(shipmentId: string, model: ModelId): Kit {
       parts = parts.filter((p) => p !== victim);
     }
   }
+  const n = ++S.seq.kit;
   return {
-    id: `KIT-${++S.seq.kit}`, shipmentId, model, state: 'inbound', slot: -1, pos: { x: 0, z: 0 },
+    id: `KIT-${n}`, shipmentId, model, state: 'inbound', slot: -1, pos: { x: 0, z: 0 }, ops: opsFor(n),
     parts, pieces: makePieces(model, parts), damage: 0, by: null, opT: 0, opRolled: false, priority: false, receivedAt: 0, startedAt: 0,
     bom, exception, po: `45000${12000 + S.seq.kit}`, grDoc: null, shortage: 0, wrongIn: 0,
   };

@@ -26,7 +26,7 @@ export function KitList() {
           <div key={k.id} className={`row ${sel === sh.id ? 'sel' : ''}`} onClick={() => select(sh.id)}>
             <Swatch model={k.model} />
             <div className="grow">
-              <div className="t1">{k.id} <Chip s={st} />{k.damage > 0 && <Chip s={{ label: `${k.damage} dmg`, tone: 'bad' }} />}</div>
+              <div className="t1">{k.id} <span className="ops-tag mono" title="Ops sequence">Op {k.ops}</span> <Chip s={st} />{k.damage > 0 && <Chip s={{ label: `${k.damage} dmg`, tone: 'bad' }} />}</div>
               <div className="t2">{sh.id} · {MODELS[k.model].short} · {dueText(sh.due)}</div>
               {k.state === 'waiting' && <Bar v={kitProgress(k)} tone={k.by === 'operator' ? '' : 'warn'} />}
             </div>

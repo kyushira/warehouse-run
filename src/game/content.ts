@@ -44,6 +44,15 @@ export const CUSTOMERS = [
 ];
 export const CARRIERS = ['Bluepeak', 'WareTrack', 'Northline', 'Swift Haul', 'Ironroad'];
 
+/** Workcentre names, in floor order (cell 1, 2, 3). Cell 3 is unlocked by the 'wc3' upgrade. */
+export const WC_NAMES = ['FISE', 'Centris', 'MDP'] as const;
+
+/**
+ * Ops sequence numbers a kit can carry (one per kit, cosmetic label for now).
+ * 40 and 50 are deliberately not used.
+ */
+export const OPS_SEQUENCE = [10, 20, 30, 60, 70, 80, 90] as const;
+
 export type UpgradeId = 'wc3' | 'forklift' | 'overtime' | 'operator' | 'cutter' | 'skip' | 'rfid';
 export interface UpgradeDef {
   id: UpgradeId;
@@ -52,7 +61,7 @@ export interface UpgradeDef {
   cost: number[];
 }
 export const UPGRADES: UpgradeDef[] = [
-  { id: 'wc3', name: 'Open WC-3', desc: 'Commission a third build cell', cost: [2400] },
+  { id: 'wc3', name: `Open ${WC_NAMES[2]}`, desc: 'Commission a third build cell', cost: [2400] },
   { id: 'operator', name: 'Detrash operator', desc: 'Auto-detrashes one kit at a time', cost: [1800, 3200] },
   { id: 'rfid', name: 'RFID portal', desc: 'Auto-posts goods receipts for error-free kits', cost: [2600] },
   { id: 'forklift', name: 'Lease forklift', desc: '+1 forklift in the fleet', cost: [900, 1600] },

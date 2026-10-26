@@ -330,7 +330,7 @@ export function DetrashModal() {
         <div className="dt-h">
           <div className="swatch" style={{ background: MODELS[kit.model].color }}>{MODELS[kit.model].short.split('-')[0]}</div>
           <div className="grow">
-            <b>Kit prep · {kit.id}</b>
+            <b>Kit prep · {kit.id} <span className="ops-tag mono" title="Ops sequence">Op {kit.ops}</span></b>
             <div className="sub">{MODELS[kit.model].name} kit · {sh?.id} · {sh && dueText(sh.due)}{sh?.rush ? ' · RUSH' : ''}</div>
           </div>
           {kit.damage > 0 && <Chip s={{ label: `${kit.damage} part${kit.damage > 1 ? 's' : ''} damaged`, tone: 'bad' }} />}

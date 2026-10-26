@@ -460,3 +460,6 @@ html { touch-action: manipulation; }
 .topbar, .sheet, .zoom, .settings, .overlay, .dt-wrap, .admin, .toasts { touch-action: pan-x pan-y; }
 .topbar, .sheet .tabs, .zoom, .settings, .btn, .pin, .ship-tab, .grab { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .dt-view, .dt-view canvas { touch-action: none; }
+
+/* ops sequence number on kits */
+.ops-tag { display: inline-block; padding: 1px 6px; border-radius: 6px; background: #eef2ff; color: #4338ca; font-size: 10.5px; font-weight: 800; vertical-align: 1px; }
