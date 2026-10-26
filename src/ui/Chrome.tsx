@@ -15,6 +15,7 @@ import { money, pct } from './format';
 import { ModChips, ModList, modNames } from './mods';
 import { adminLabel, openAdmin } from './AdminPanel';
 import { isTainted } from '../game/admin';
+import { getNumber, local } from '../lib/storage';
 
 export function Toasts() {
   const toasts = useUi((s) => s.toasts);
@@ -135,8 +136,8 @@ export function TitleScreen() {
   const help = useUi((s) => s.helpOpen);
   const setHelp = useUi((s) => s.setHelp);
   if (phase !== 'title' && !help) return null;
-  const best = +(localStorage.getItem('kitflow.best') || 0);
-  const dailyBest = +(localStorage.getItem(dailyKey(todaySeed())) || 0);
+  const best = getNumber('kitflow.best');
+  const dailyBest = getNumber(dailyKey(todaySeed()));
   const playing = phase !== 'title';
   return (
     <div className="overlay">
@@ -209,11 +210,11 @@ function ReportCard() {
   const [copied, setCopied] = useState(false);
   const [{ r, best, isBest }] = useState(() => {
     const r = report();
-    const best = +(localStorage.getItem('kitflow.best') || 0);
+    const best = getNumber('kitflow.best');
     // admin/debug shifts never count toward best scores
     if (isTainted()) return { r, best, isBest: false };
-    if (r.score > best) localStorage.setItem('kitflow.best', String(r.score));
-    if (S.daily && r.score > +(localStorage.getItem(dailyKey(S.seed)) || -Infinity)) localStorage.setItem(dailyKey(S.seed), String(r.score));
+    if (r.score > best) local.set('kitflow.best', String(r.score));
+    if (S.daily && r.score > getNumber(dailyKey(S.seed), -Infinity)) local.set(dailyKey(S.seed), String(r.score));
     return { r, best, isBest: r.score > best };
   });
   const st = S.stats;

@@ -10,6 +10,7 @@ import {
   postGR, quarantinePart, removePiece, repairWC, scanPart, shipOut, tick, upgradeCost, buyUpgrade, drainEvents,
 } from './sim';
 import type { SimState } from './sim';
+import { session } from '../lib/storage';
 
 export const ADMIN_PIN = '0000';
 const KEY = 'kitflow.admin';
@@ -33,7 +34,7 @@ const DEFAULT_FLAGS: AdminFlags = {
 };
 
 export const admin = {
-  unlocked: typeof sessionStorage !== 'undefined' && sessionStorage.getItem(KEY) === '1',
+  unlocked: session.get(KEY) === '1',
   panelOpen: false,
   flags: { ...DEFAULT_FLAGS },
   fps: 60,
@@ -51,14 +52,14 @@ export function unlockAdmin(pin: string) {
   if (pin !== ADMIN_PIN) return false;
   admin.unlocked = true;
   admin.panelOpen = true;
-  if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(KEY, '1');
+  session.set(KEY, '1');
   return true;
 }
 export function lockAdmin() {
   admin.unlocked = false;
   admin.panelOpen = false;
   admin.flags = { ...DEFAULT_FLAGS };
-  if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(KEY);
+  session.remove(KEY);
 }
 
 export function setFlag<K extends keyof AdminFlags>(k: K, v: AdminFlags[K]) {

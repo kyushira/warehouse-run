@@ -4,6 +4,8 @@
  *  - Music: generative lo-fi loop (pad chords, bass, soft kick, hats, sparse arp),
  *    scheduled with a look-ahead timer so it stays tight even when frames drop.
  */
+import { local } from '../lib/storage';
+
 export type SfxName =
   | 'order' | 'drop' | 'clean' | 'ready' | 'ship' | 'alarm' | 'horn' | 'crack' | 'buy' | 'deny' | 'done' | 'end'
   | 'snip' | 'peel' | 'lift' | 'pop' | 'click' | 'layer' | 'scan' | 'scanBad' | 'seal';
@@ -12,7 +14,7 @@ const KEY = 'kitflow.settings';
 export interface AudioSettings { music: boolean; sfx: boolean; musicVol: number }
 const load = (): AudioSettings => {
   try {
-    return { music: true, sfx: true, musicVol: 0.6, ...JSON.parse(localStorage.getItem(KEY) || '{}') };
+    return { music: true, sfx: true, musicVol: 0.6, ...JSON.parse(local.get(KEY) || '{}') };
   } catch {
     return { music: true, sfx: true, musicVol: 0.6 };
   }
@@ -62,7 +64,7 @@ class AudioEngine {
   }
 
   private save() {
-    localStorage.setItem(KEY, JSON.stringify(this.settings));
+    local.set(KEY, JSON.stringify(this.settings));
   }
 
   setMusic(on: boolean) {
