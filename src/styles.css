@@ -452,3 +452,11 @@ input[type='range'] { accent-color: var(--blue); width: 100%; }
   .howto > div { padding: 7px; font-size: 11px; }
   .grade { font-size: 44px; }
 }
+
+/* ---------- touch gestures: no accidental page zoom / text selection ----------
+ * iOS ignores user-scalable=no, so a pinch on a HUD panel zoomed the whole page.
+ * pan-x pan-y keeps scrolling but blocks pinch-zoom; manipulation kills double-tap zoom. */
+html { touch-action: manipulation; }
+.topbar, .sheet, .zoom, .settings, .overlay, .dt-wrap, .admin, .toasts { touch-action: pan-x pan-y; }
+.topbar, .sheet .tabs, .zoom, .settings, .btn, .pin, .ship-tab, .grab { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.dt-view, .dt-view canvas { touch-action: none; }
