@@ -10,7 +10,12 @@ const { ACTION } = CameraControlsImpl;
 
 /** Screen-space area not covered by HUD panels; the scene is centred in it. */
 function freeArea(W: number, H: number) {
-  const mobile = W < 820;
+  if (H <= 520 && W >= 560) {
+    // landscape phone: the panel is docked on the right (see styles.css --side)
+    const right = Math.min(380, W * 0.46);
+    return { left: 0, right, top: 56, bottom: 0, w: W - right, h: H - 56 };
+  }
+  const mobile = W < 820 || H <= 520;
   const left = mobile ? 0 : 56;
   const right = mobile ? 0 : 364;
   const top = mobile ? 72 : 80;

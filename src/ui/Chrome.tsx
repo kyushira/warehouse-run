@@ -156,20 +156,22 @@ export function TitleScreen() {
               </div>
             ))}
           </div>
-          <p className="sub" style={{ marginBottom: 12 }}>
+          <p className="sub kbd-hint" style={{ marginBottom: 12 }}>
             Shortcuts: <b>D</b> detrash next kit · <b>Space</b> pause · <b>Esc</b> close. Drag the map to pan, scroll or pinch to zoom.
           </p>
-          {playing ? (
-            <button className="btn pri" style={{ width: '100%', padding: 12 }} onClick={() => { setHelp(false); togglePause(false); }}>Resume shift</button>
-          ) : (
-            <>
-              <button className="btn pri" style={{ width: '100%', padding: 12, fontSize: 14 }} onClick={() => planShift(false)}><Dices size={16} /> Start shift</button>
-              <button className="btn" style={{ width: '100%', padding: 12, marginTop: 8 }} onClick={() => planShift(true)}>
-                <CalendarDays size={15} /> Daily challenge{dailyBest ? ` · today's best ${money(dailyBest)}` : ''}
-              </button>
-            </>
-          )}
-          {best > 0 && !playing && <p className="sub" style={{ textAlign: 'center', marginTop: 10 }}>Best shift: {money(best)}</p>}
+          <div className="dialog-actions">
+            {playing ? (
+              <button className="btn pri" style={{ width: '100%', padding: 12 }} onClick={() => { setHelp(false); togglePause(false); }}>Resume shift</button>
+            ) : (
+              <>
+                <button className="btn pri" style={{ width: '100%', padding: 12, fontSize: 14 }} onClick={() => planShift(false)}><Dices size={16} /> Start shift</button>
+                <button className="btn" style={{ width: '100%', padding: 12, marginTop: 8 }} onClick={() => planShift(true)}>
+                  <CalendarDays size={15} /> Daily challenge{dailyBest ? ` · today's best ${money(dailyBest)}` : ''}
+                </button>
+              </>
+            )}
+            {best > 0 && !playing && <p className="sub" style={{ textAlign: 'center', marginTop: 10 }}>Best shift: {money(best)}</p>}
+          </div>
         </div>
       </div>
     </div>
@@ -193,8 +195,10 @@ export function ShiftBriefing() {
         </div>
         <div className="bd">
           <ModList mods={plan.mods} />
-          <button className="btn pri" style={{ width: '100%', padding: 12, fontSize: 14 }} onClick={() => beginShift()}>Clock in</button>
-          <button className="btn" style={{ width: '100%', padding: 10, marginTop: 8 }} onClick={() => useUi.setState({ phase: 'title' })}>Back</button>
+          <div className="dialog-actions">
+            <button className="btn pri" style={{ width: '100%', padding: 12, fontSize: 14 }} onClick={() => beginShift()}>Clock in</button>
+            <button className="btn" style={{ width: '100%', padding: 10, marginTop: 8 }} onClick={() => useUi.setState({ phase: 'title' })}>Back</button>
+          </div>
         </div>
       </div>
     </div>

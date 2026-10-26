@@ -30,4 +30,6 @@ export function useMedia(q: string) {
   }, [q]);
   return m;
 }
-export const useIsMobile = () => useMedia('(max-width: 819px)');
+/** Phone layout: narrow portrait, or a short landscape phone (desktop panels would cover the yard). */
+export const MOBILE_QUERY = '(max-width: 819px), (max-height: 520px)';
+export const useIsMobile = () => useMedia(MOBILE_QUERY);

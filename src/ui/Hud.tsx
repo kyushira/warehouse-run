@@ -7,6 +7,9 @@ import { ShipTabs, ShipmentTracker, TrackingBody } from './ShipmentTracker';
 import { ZoomControls } from './Chrome';
 import { YardList } from './YardList';
 
+/** 46% of the *visible* height: dvh excludes the iOS/Android browser toolbars (vh doesn't). */
+const SHEET_H = typeof CSS !== 'undefined' && CSS.supports?.('height', '1dvh') ? '46dvh' : '46vh';
+
 /** Desktop: one sidebar (floor / yard / shop) + one shipment-tracking panel. */
 export function DesktopHud() {
   return (
@@ -37,7 +40,7 @@ export function MobileHud() {
   return (
     <>
       <ZoomControls />
-      <div className="sheet panel" style={{ height: open ? '46vh' : 'calc(92px + var(--safe-b))' }}>
+      <div className={`sheet panel ${open ? '' : 'closed'}`} style={{ height: open ? SHEET_H : 'calc(92px + var(--safe-b))' }}>
         <div className="grab" onClick={() => setSheet(!open)}><i /></div>
         <div className="tabs">
           {tabs.map((t) => (
