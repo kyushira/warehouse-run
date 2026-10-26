@@ -5,6 +5,9 @@
 A dashboard-style warehouse strategy game for desktop and mobile browsers,
 built with React, React Three Fiber and three.js.
 
+**Play:** https://kyushira.github.io/warehouse-run/ (deployed from `main` by
+`.github/workflows/deploy.yml`)
+
 You run one shift (06:00–14:00, 5 minutes real time) at the Riverside Hub:
 detrash inbound kits (cut straps → peel wrap → lift cardboard → pull dunnage,
 without touching the parts), keep the workcentres fed while they build machines,
