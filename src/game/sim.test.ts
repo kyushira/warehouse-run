@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import * as G from './sim';
-import { SHIFT_SEC, TUNE } from './content';
+import { OPS, SHIFT_SEC, TUNE } from './content';
 import { MODIFIERS, rollModifiers, tuneFor } from './modifiers';
 import type { ModifierId } from './modifiers';
 
@@ -221,6 +221,27 @@ describe('detrash and goods receipt rules', () => {
     const r = G.removePiece(k.id, strap.id);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe('skip');
+  });
+});
+
+describe('ops and workcentres', () => {
+  it('workcentres are FISE, Centris and MDP', () => {
+    G.startShift(42);
+    expect(G.S.wcs.map((w) => w.id)).toEqual(['FISE', 'Centris', 'MDP']);
+  });
+  it('every kit gets an op number from the routing list, deterministically per seed', () => {
+    const opsFor = (seed: number) => {
+      runShift({ seed, play: false });
+      return G.S.kits.map((k) => [k.id, k.op] as const);
+    };
+    const a = opsFor(7);
+    expect(a.length).toBeGreaterThan(0);
+    for (const [, op] of a) expect(OPS).toContain(op);
+    expect(opsFor(7)).toEqual(a);
+    // across many kits, more than one op number shows up
+    const seen = new Set<number>();
+    for (let s = 1; s <= 5; s++) for (const [, op] of opsFor(s)) seen.add(op);
+    expect(seen.size).toBeGreaterThan(3);
   });
 });
 

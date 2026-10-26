@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { ArrowRight, CircleCheck, CircleX, Info, Recycle, ScanBarcode, ShieldAlert, TriangleAlert, X } from 'lucide-react';
 import { MODELS, TUNE } from '../game/content';
 import {
-  LAYERS, LAYER_HINT, LAYER_LABEL, S, currentLayer, emptySkip, grSummary, kitById, postGR, quarantinePart, removePiece,
+  KIT_CRATE, LAYERS, LAYER_HINT, LAYER_LABEL, S, currentLayer, emptySkip, grSummary, kitById, postGR, quarantinePart, removePiece,
   scanPart, shipmentById, touchPart, waitingKits,
 } from '../game/sim';
 import type { Kit, Part, Piece, TrashKind } from '../game/sim';
@@ -20,6 +20,8 @@ import { Bar, CANVAS_DPR, Chip, IS_TOUCH, useIsMobile } from '../ui/primitives';
 import { Pallet, PartMesh, PieceGeom, sharedPieceMats } from '../scene/models';
 import type { PieceMats } from '../scene/models';
 import { barcodeTexture, mat } from '../scene/materials';
+import { MIN_SWIPE_PX, crossesPolyline, strapPolyline } from './swipe';
+import type { P2 } from './swipe';
 
 const SFX_FOR: Record<TrashKind, 'snip' | 'peel' | 'lift' | 'pop'> = { strap: 'snip', wrap: 'peel', card: 'lift', foam: 'pop' };
 
@@ -75,9 +77,15 @@ function TrashPiece({ piece, kit, active, feedback }: { piece: Piece; kit: Kit; 
   });
 
   if (gone) return null;
+  const swipeOnly = piece.kind === 'strap';
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     if (e.delta > 8 || piece.removed) return;
     e.stopPropagation();
+    if (swipeOnly) {
+      // straps are cut with a swipe (SwipeCutter); a tap just teaches the gesture
+      if (active) feedback('Swipe across the strap to cut it', false);
+      return;
+    }
     const res = removePiece(kit.id, piece.id);
     if (res.ok) {
       sfx(SFX_FOR[piece.kind]);
@@ -92,7 +100,7 @@ function TrashPiece({ piece, kit, active, feedback }: { piece: Piece; kit: Kit; 
     <group
       ref={g}
       onClick={onClick}
-      onPointerOver={(e) => { e.stopPropagation(); if (!piece.removed) { setHl(active); document.body.style.cursor = active ? 'pointer' : 'not-allowed'; } }}
+      onPointerOver={(e) => { e.stopPropagation(); if (!piece.removed) { setHl(active); document.body.style.cursor = active ? (swipeOnly ? 'crosshair' : 'pointer') : 'not-allowed'; } }}
       onPointerOut={() => { setHl(false); document.body.style.cursor = ''; }}
     >
       <PieceGeom piece={piece} mats={mats} />
@@ -165,19 +173,167 @@ function ClickPart({ part, kit, feedback }: { part: Part; kit: Kit; feedback: Fe
   );
 }
 
-/** Keep the whole kit in frame for any viewport shape (portrait phones need more distance). */
-function FitCamera() {
+const VIEW_TARGET = new THREE.Vector3(0.3, 0.1, 0);
+const MIN_DIST = 3, MAX_DIST = 13;
+
+/**
+ * Keep the whole kit in frame for any viewport shape (portrait phones need more
+ * distance). The default view is applied only when a kit opens. The 3D view also
+ * resizes while you work (on phones the ERP list grows as parts are scanned or
+ * quarantined, and hint text can wrap), and those resizes used to snap the camera
+ * back to the default, throwing away the player's zoom and angle after every scan.
+ * Now a resize keeps the player's angle and scales the distance by how much the
+ * fit changed, so their zoom stays proportional.
+ */
+function FitCamera({ kitId }: { kitId: string }) {
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
   const controls = useThree((s) => s.controls) as unknown as { update?: () => void } | null;
+  const last = useRef<{ kitId: string; fit: number } | null>(null);
   useEffect(() => {
+    if (!size.width || !size.height) return;
     const t = Math.tan(THREE.MathUtils.degToRad(18));
-    const dist = Math.max(1.75 / t, 2.2 / (t * (size.width / size.height)));
-    camera.position.copy(new THREE.Vector3(3.1, 2.8, 3.8).normalize().multiplyScalar(dist)).add(new THREE.Vector3(0.3, 0.1, 0));
-    camera.lookAt(0.3, 0.1, 0);
+    const fit = Math.max(1.75 / t, 2.2 / (t * (size.width / size.height)));
+    const prev = last.current;
+    if (!prev || prev.kitId !== kitId) {
+      camera.position.copy(new THREE.Vector3(3.1, 2.8, 3.8).normalize().multiplyScalar(fit)).add(VIEW_TARGET);
+    } else if (Math.abs(fit - prev.fit) > 1e-6) {
+      const off = camera.position.clone().sub(VIEW_TARGET);
+      const dist = THREE.MathUtils.clamp(off.length() * (fit / prev.fit), MIN_DIST, MAX_DIST);
+      camera.position.copy(VIEW_TARGET).add(off.setLength(dist));
+    }
+    last.current = { kitId, fit };
+    camera.lookAt(VIEW_TARGET);
     controls?.update?.();
-  }, [camera, size.width, size.height, controls]);
+  }, [camera, size.width, size.height, controls, kitId]);
   return null;
+}
+
+/* ------------------------------ swipe to cut ------------------------------- */
+/** Screen-space swipe trail, drawn by SwipeTrail over the 3D view. */
+const trail: { pts: { x: number; y: number; t: number }[]; kick: (() => void) | null } = { pts: [], kick: null };
+const TRAIL_MS = 220;
+
+/**
+ * Strap layer: one-finger / left-button drag is a knife. Each pointer move is a
+ * segment; any strap whose projected centreline it crosses is cut. Rotation moves
+ * to two fingers / right-drag while straps remain (see OrbitControls below).
+ */
+function SwipeCutter({ kit, active, feedback }: { kit: Kit; active: boolean; feedback: Feedback }) {
+  const camera = useThree((s) => s.camera);
+  const gl = useThree((s) => s.gl);
+  const live = useRef({ kit, active, feedback });
+  live.current = { kit, active, feedback };
+  useEffect(() => {
+    const el = gl.domElement;
+    const pointers = new Set<number>();
+    let stroke: { id: number; start: P2; last: P2; armed: boolean; warned: boolean } | null = null;
+    const local = (e: PointerEvent): P2 => {
+      const r = el.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
+    const project = (p: [number, number, number]): P2 | null => {
+      const v = new THREE.Vector3(p[0], p[1] - 0.75, p[2]).project(camera);
+      if (v.z > 1) return null;
+      const r = el.getBoundingClientRect();
+      return { x: ((v.x + 1) / 2) * r.width, y: ((1 - v.y) / 2) * r.height };
+    };
+    const cutAlong = (a: P2, b: P2) => {
+      const { kit: k, feedback: fb } = live.current;
+      for (const piece of k.pieces) {
+        if (piece.kind !== 'strap' || piece.removed) continue;
+        const line = strapPolyline(piece, KIT_CRATE).map(project);
+        if (line.some((q) => !q) || !crossesPolyline(a, b, line as P2[])) continue;
+        const res = removePiece(k.id, piece.id);
+        if (res.ok) {
+          sfx('snip');
+          if (res.layerDone && !res.cleared) sfx('layer');
+          bump();
+        } else if (res.hint && stroke && !stroke.warned) {
+          stroke.warned = true;
+          sfx('deny');
+          fb(res.hint, true);
+        }
+      }
+    };
+    const down = (e: PointerEvent) => {
+      pointers.add(e.pointerId);
+      // a second finger means pinch/rotate, not a cut
+      if (pointers.size > 1) { stroke = null; return; }
+      if (!live.current.active || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      const p = local(e);
+      stroke = { id: e.pointerId, start: p, last: p, armed: false, warned: false };
+      trail.pts = [{ ...p, t: performance.now() }];
+    };
+    const move = (e: PointerEvent) => {
+      if (!stroke || e.pointerId !== stroke.id || !live.current.active) return;
+      const p = local(e);
+      if (!stroke.armed) {
+        if (Math.hypot(p.x - stroke.start.x, p.y - stroke.start.y) < MIN_SWIPE_PX) return;
+        stroke.armed = true;
+        stroke.last = stroke.start;
+      }
+      cutAlong(stroke.last, p);
+      stroke.last = p;
+      trail.pts.push({ ...p, t: performance.now() });
+      trail.kick?.();
+    };
+    const up = (e: PointerEvent) => {
+      pointers.delete(e.pointerId);
+      if (stroke && e.pointerId === stroke.id) stroke = null;
+    };
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('pointermove', move);
+    addEventListener('pointerup', up);
+    addEventListener('pointercancel', up);
+    return () => {
+      el.removeEventListener('pointerdown', down);
+      el.removeEventListener('pointermove', move);
+      removeEventListener('pointerup', up);
+      removeEventListener('pointercancel', up);
+    };
+  }, [camera, gl]);
+  return null;
+}
+
+/** Fading knife trail over the 3D view; only animates while a swipe is fresh. */
+function SwipeTrail() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const draw = () => {
+      raf = 0;
+      const cv = ref.current;
+      if (!cv) return;
+      const dpr = Math.min(2, devicePixelRatio || 1);
+      const w = cv.clientWidth, h = cv.clientHeight;
+      if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+        cv.width = Math.round(w * dpr);
+        cv.height = Math.round(h * dpr);
+      }
+      const g = cv.getContext('2d');
+      if (!g) return;
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.clearRect(0, 0, w, h);
+      const now = performance.now();
+      trail.pts = trail.pts.filter((p) => now - p.t < TRAIL_MS);
+      const pts = trail.pts;
+      g.lineCap = 'round';
+      for (let i = 1; i < pts.length; i++) {
+        const k = 1 - (now - pts[i].t) / TRAIL_MS;
+        g.strokeStyle = `rgba(255,255,255,${0.9 * k})`;
+        g.lineWidth = 2 + 5 * k;
+        g.beginPath();
+        g.moveTo(pts[i - 1].x, pts[i - 1].y);
+        g.lineTo(pts[i].x, pts[i].y);
+        g.stroke();
+      }
+      if (pts.length) raf = requestAnimationFrame(draw);
+    };
+    trail.kick = () => { if (!raf) raf = requestAnimationFrame(draw); };
+    return () => { cancelAnimationFrame(raf); trail.kick = null; trail.pts = []; };
+  }, []);
+  return <canvas ref={ref} className="swipe-trail" aria-hidden />;
 }
 
 function KitView({ kit, feedback }: { kit: Kit; feedback: Feedback }) {
@@ -223,7 +379,7 @@ function ErpPanel({ kit, compact }: { kit: Kit; compact: boolean }) {
         <span className="erp-logo">ERP</span>
         <div className="grow">
           <b>Goods receipt · MIGO</b>
-          <div className="sub mono">PO {kit.po} · Kitwell Supply</div>
+          <div className="sub mono">PO {kit.po} · Op {kit.op} · Kitwell Supply</div>
         </div>
         {kit.grDoc && <Chip s={{ label: `GR ${kit.grDoc}`, tone: 'good' }} />}
       </div>
@@ -319,6 +475,7 @@ export function DetrashModal() {
   const sh = shipmentById(kit.shipmentId);
   const scanning = kit.state === 'scan';
   const cur = currentLayer(kit);
+  const cutting = kit.state === 'waiting' && cur === 'strap';
   const others = waitingKits().filter((k) => k.id !== kit.id).length;
   const { count, cap, emptyT } = S.skip;
   const full = count >= cap || emptyT > 0;
@@ -331,7 +488,7 @@ export function DetrashModal() {
           <div className="swatch" style={{ background: MODELS[kit.model].color }}>{MODELS[kit.model].short.split('-')[0]}</div>
           <div className="grow">
             <b>Kit prep · {kit.id}</b>
-            <div className="sub">{MODELS[kit.model].name} kit · {sh?.id} · {sh && dueText(sh.due)}{sh?.rush ? ' · RUSH' : ''}</div>
+            <div className="sub">Op {kit.op} · {MODELS[kit.model].name} kit · {sh?.id} · {sh && dueText(sh.due)}{sh?.rush ? ' · RUSH' : ''}</div>
           </div>
           {kit.damage > 0 && <Chip s={{ label: `${kit.damage} part${kit.damage > 1 ? 's' : ''} damaged`, tone: 'bad' }} />}
           <button className="btn icon" aria-label="Close" onClick={closeKit}><X size={16} /></button>
@@ -362,15 +519,26 @@ export function DetrashModal() {
               <hemisphereLight args={['#ffffff', '#b9c6d8', 1.1]} />
               <directionalLight position={[4, 8, 5]} intensity={1.5} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0005} />
               <KitView kit={kit} feedback={feedback} />
-              <OrbitControls makeDefault enablePan={false} target={[0.3, 0.1, 0]} minDistance={3} maxDistance={13} maxPolarAngle={1.38} rotateSpeed={0.7} />
-              <FitCamera />
+              <SwipeCutter kit={kit} active={cutting} feedback={feedback} />
+              <OrbitControls
+                makeDefault enablePan={false} target={[0.3, 0.1, 0]} minDistance={MIN_DIST} maxDistance={MAX_DIST} maxPolarAngle={1.38} rotateSpeed={0.7}
+                // while straps remain, one finger / left button is the knife; rotate with two fingers / right-drag
+                mouseButtons={cutting ? { LEFT: -1 as THREE.MOUSE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE } : { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
+                touches={cutting ? { ONE: -1 as THREE.TOUCH, TWO: THREE.TOUCH.DOLLY_ROTATE } : { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
+              />
+              <FitCamera kitId={kit.id} />
             </Canvas>
             {done && (
               <div className="clean-badge">
                 <CircleCheck size={15} /> GR {kit.grDoc} posted · queued for the next free workcentre
               </div>
             )}
-            <div className="corner">{IS_TOUCH ? 'Drag to rotate · pinch to zoom' : 'Drag to rotate · scroll to zoom'}</div>
+            <SwipeTrail />
+            <div className="corner">
+              {cutting
+                ? (IS_TOUCH ? 'Swipe to cut · two fingers to rotate and zoom' : 'Drag to cut · right-drag to rotate · scroll to zoom')
+                : (IS_TOUCH ? 'Drag to rotate · pinch to zoom' : 'Drag to rotate · scroll to zoom')}
+            </div>
           </div>
           <ErpPanel kit={kit} compact={compact} />
         </div>

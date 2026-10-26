@@ -216,7 +216,7 @@ function Workcentre({ idx }: { idx: number }) {
   const wc = S.wcs[idx];
   const { x, z } = WC_POS[idx];
   const light = useRef<THREE.MeshStandardMaterial>(null);
-  const nameTex = useMemo(() => labelTexture(wc.id, { fg: '#ffffff', bg: '#1e3a8a', w: 256, h: 112, size: 64 }), [wc.id]);
+  const nameTex = useMemo(() => labelTexture(wc.id, { fg: '#ffffff', bg: '#1e3a8a', w: 256, h: 112, size: wc.id.length > 5 ? 46 : 64 }), [wc.id]);
   useFrame(({ clock }) => {
     const w = S.wcs[idx];
     if (!light.current) return;

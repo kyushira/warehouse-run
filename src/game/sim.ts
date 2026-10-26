@@ -14,7 +14,7 @@
  * GR: posting early books unscanned parts as short (expedite wasted); unquarantined wrong parts
  *     reach the workcentre and cost rework.
  */
-import { CARRIERS, CITIES, CUSTOMERS, MODEL_LIST, MODELS, SHIFT_SEC, UPGRADES } from './content';
+import { CARRIERS, CITIES, CUSTOMERS, MODEL_LIST, MODELS, OPS, SHIFT_SEC, UPGRADES, WC_NAMES } from './content';
 import type { ModelId, Tune, UpgradeId } from './content';
 import { tuneFor } from './modifiers';
 import type { ModifierId } from './modifiers';
@@ -47,7 +47,7 @@ export type TrashKind = 'strap' | 'wrap' | 'card' | 'foam';
 export const LAYERS: TrashKind[] = ['strap', 'wrap', 'card', 'foam'];
 export const LAYER_LABEL: Record<TrashKind, string> = { strap: 'Straps', wrap: 'Stretch wrap', card: 'Cardboard', foam: 'Dunnage' };
 export const LAYER_HINT: Record<TrashKind, string> = {
-  strap: 'Cut the yellow straps',
+  strap: 'Swipe across the yellow straps to cut them',
   wrap: 'Peel the stretch wrap bands',
   card: 'Lift the lid, then the sleeve',
   foam: 'Pull the foam dunnage. Don’t touch the parts!',
@@ -71,6 +71,8 @@ export interface Kit {
   /** New Hire Day: whether the operator's nick roll has happened for this kit */
   opRolled: boolean;
   receivedAt: number; startedAt: number;
+  /** routing operation number the kit is issued against (one of OPS) */
+  op: number;
   bom: BomLine[]; exception: 'none' | 'wrong' | 'short'; po: string; grDoc: string | null; shortage: number; wrongIn: number;
 }
 
@@ -130,7 +132,7 @@ const fresh = (seed: number, mods: ModifierId[] = [], daily = false, tune = tune
   revenue: 0, costs: 0, spent: 0, startBudget: tune.startBudget,
   shipments: [], kits: [], machines: [], trucks: [], tasks: [],
   wcs: WC_POS.map((_, i) => ({
-    id: `WC-${i + 1}`, idx: i, unlocked: i < 2, state: 'idle', down: false, repairT: 0, broke: false,
+    id: WC_NAMES[i] ?? `WC-${i + 1}`, idx: i, unlocked: i < 2, state: 'idle', down: false, repairT: 0, broke: false,
     kitId: null, machineId: null, model: null, progress: 0, buildSec: 1,
   })),
   forklifts: [0, 1].map((i) => makeForklift(i)),
@@ -289,11 +291,20 @@ function makeKit(shipmentId: string, model: ModelId): Kit {
       parts = parts.filter((p) => p !== victim);
     }
   }
+  const kitNo = ++S.seq.kit;
   return {
-    id: `KIT-${++S.seq.kit}`, shipmentId, model, state: 'inbound', slot: -1, pos: { x: 0, z: 0 },
+    id: `KIT-${kitNo}`, shipmentId, model, state: 'inbound', slot: -1, pos: { x: 0, z: 0 }, op: opFor(kitNo),
     parts, pieces: makePieces(model, parts), damage: 0, by: null, opT: 0, opRolled: false, priority: false, receivedAt: 0, startedAt: 0,
-    bom, exception, po: `45000${12000 + S.seq.kit}`, grDoc: null, shortage: 0, wrongIn: 0,
+    bom, exception, po: `45000${12000 + kitNo}`, grDoc: null, shortage: 0, wrongIn: 0,
   };
+}
+
+/**
+ * Op number for a kit. Drawn from its own seeded stream (seed + kit number), not
+ * S.rng, so adding it doesn't shift any existing roll: same seed, same shift.
+ */
+function opFor(kitNo: number) {
+  return OPS[Math.floor(mulberry((S.seed ^ Math.imul(kitNo, 0x9e3779b1)) >>> 0)() * OPS.length)];
 }
 
 /* --------------------------------- orders ---------------------------------- */

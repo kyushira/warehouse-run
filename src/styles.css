@@ -265,6 +265,7 @@ input[type='range'] { accent-color: var(--blue); width: 100%; }
 .dt-feed.warn svg { color: #d97706; }
 .dt-feed.bad { background: var(--red-50); color: var(--red); }
 .dt-feed.info svg { color: var(--blue); }
+.dt-view .swipe-trail { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .dt-view .corner { position: absolute; left: 10px; bottom: 10px; font-size: 11px; color: var(--ink3); font-weight: 600; pointer-events: none; }
 .dt-f { display: flex; align-items: center; gap: 10px; padding: 10px 14px 12px; border-top: 1px solid var(--line); }
 .dt-f .skip { flex: 1; display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--ink2); min-width: 0; }

@@ -27,7 +27,7 @@ export function KitList() {
             <Swatch model={k.model} />
             <div className="grow">
               <div className="t1">{k.id} <Chip s={st} />{k.damage > 0 && <Chip s={{ label: `${k.damage} dmg`, tone: 'bad' }} />}</div>
-              <div className="t2">{sh.id} · {MODELS[k.model].short} · {dueText(sh.due)}</div>
+              <div className="t2">Op {k.op} · {sh.id} · {MODELS[k.model].short} · {dueText(sh.due)}</div>
               {k.state === 'waiting' && <Bar v={kitProgress(k)} tone={k.by === 'operator' ? '' : 'warn'} />}
             </div>
             {k.state === 'waiting' && (

@@ -42,6 +42,11 @@ export const CUSTOMERS = [
   'Northwind Foods', 'Acme Bottling', 'Brightside Pharma', 'Cascade Dairy', 'Summit Brewing',
   'Orchard Labs', 'Bluebird Snacks', 'Ridgeway Paints', 'Harbor Cosmetics', 'Pinecrest Pet',
 ];
+/** Build cells on the floor, in layout order (the third is unlocked by an upgrade). */
+export const WC_NAMES = ['FISE', 'Centris', 'MDP'] as const;
+/** Routing operation numbers a kit can be issued against. */
+export const OPS = [10, 20, 30, 60, 70, 80, 90] as const;
+
 export const CARRIERS = ['Bluepeak', 'WareTrack', 'Northline', 'Swift Haul', 'Ironroad'];
 
 export type UpgradeId = 'wc3' | 'forklift' | 'overtime' | 'operator' | 'cutter' | 'skip' | 'rfid';
@@ -52,7 +57,7 @@ export interface UpgradeDef {
   cost: number[];
 }
 export const UPGRADES: UpgradeDef[] = [
-  { id: 'wc3', name: 'Open WC-3', desc: 'Commission a third build cell', cost: [2400] },
+  { id: 'wc3', name: 'Open MDP', desc: 'Commission a third build cell', cost: [2400] },
   { id: 'operator', name: 'Detrash operator', desc: 'Auto-detrashes one kit at a time', cost: [1800, 3200] },
   { id: 'rfid', name: 'RFID portal', desc: 'Auto-posts goods receipts for error-free kits', cost: [2600] },
   { id: 'forklift', name: 'Lease forklift', desc: '+1 forklift in the fleet', cost: [900, 1600] },
