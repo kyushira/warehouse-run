@@ -1,6 +1,6 @@
 name: CI & Pages
 
-# check   : typecheck + build on every branch push and every PR (the pre-launch gate)
+# check   : typecheck + tests + build on every branch push and every PR (the pre-launch gate)
 # publish : after check passes on a push, publish to the gh-pages branch:
 #             main        -> https://kyushira.github.io/warehouse-run/
 #             any branch  -> https://kyushira.github.io/warehouse-run/preview/<branch-slug>/
@@ -37,6 +37,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm test
       # tsc --noEmit && vite build, same as the publish job
       - run: npm run build
 
