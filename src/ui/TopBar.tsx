@@ -25,7 +25,7 @@ export function TopBar() {
     <header className="topbar panel">
       <div className="brand">
         <div className="logo"><Boxes size={18} /></div>
-        <div>
+        <div className="brand-txt">
           <b>KitFlow</b>
           <small>Riverside Hub · WH-01</small>
         </div>
@@ -37,7 +37,7 @@ export function TopBar() {
       </div>
       <div className="tkpis">
         {S.mods.length > 0 && (
-          <div className="tkpi" title={modTooltip(S.mods)}>
+          <div className="tkpi hide-xs" title={modTooltip(S.mods)}>
             <Dices size={15} />
             <span className="lbl mod-names">{S.daily ? 'Daily · ' : ''}{modNames(S.mods)}</span>
           </div>

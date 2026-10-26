@@ -387,3 +387,17 @@ input[type='range'] { accent-color: var(--blue); width: 100%; }
 @media (max-width: 819px) {
   .admin { left: 8px; right: 8px; width: auto; top: calc(68px + var(--safe-t)); max-height: 48vh; z-index: 36; }
 }
+
+/* ---------- phones: top bar must always fit ----------
+ * TopBar marks optional KPIs with .hide-sm, but no rule defined it, so on
+ * 360-430px phones the bar's content (~466px) pushed Pause and the Settings
+ * menu button off the right edge of the screen. */
+.top-right { flex: none; }
+.tkpis { min-width: 0; overflow: hidden; }
+@media (max-width: 819px) {
+  .hide-sm { display: none !important; }
+  .topbar { gap: 6px; padding: 0 6px 0 8px; }
+}
+@media (max-width: 480px) {
+  .hide-xs, .brand-txt { display: none !important; }
+}
