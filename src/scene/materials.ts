@@ -41,7 +41,7 @@ export const C = {
   woodDark: '#9a6b37',
   card: '#c9a26b',
   sleeve: '#d6b27e',
-  tape: '#a7804c',
+  tape: '#8a6232',
   foam: '#f8fafc',
   fork: '#f59e0b',
   tire: '#1f2937',

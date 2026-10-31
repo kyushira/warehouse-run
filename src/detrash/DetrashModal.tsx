@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { ArrowRight, CircleCheck, CircleX, Info, Recycle, ScanBarcode, ShieldAlert, TriangleAlert, X } from 'lucide-react';
 import { MODELS, TUNE } from '../game/content';
 import {
-  LAYERS, LAYER_HINT, LAYER_LABEL, S, currentLayer, emptySkip, grSummary, kitById, postGR, quarantinePart, removePiece,
+  KIT_CRATE, LAYERS, LAYER_HINT, LAYER_LABEL, S, currentLayer, emptySkip, grSummary, kitById, postGR, quarantinePart, removePiece,
   scanPart, shipmentById, touchPart, waitingKits,
 } from '../game/sim';
 import type { Kit, Part, Piece, TrashKind } from '../game/sim';
@@ -25,31 +25,61 @@ const SFX_FOR: Record<TrashKind, 'snip' | 'peel' | 'lift' | 'pop'> = { strap: 's
 
 function cloneMats(): PieceMats {
   const b = sharedPieceMats();
-  const c = (m: THREE.Material) => {
-    const x = m.clone() as THREE.MeshStandardMaterial;
-    x.transparent = true;
-    return x;
-  };
+  // Solid pieces stay opaque until they start fading out. Marking them transparent up front puts
+  // them in the sorted transparent pass with the stretch wrap (no depth write), and the sleeve
+  // then paints over whichever wrap band happens to sort behind it (usually the bottom one).
+  const c = (m: THREE.Material) => m.clone() as THREE.MeshStandardMaterial;
   return { strap: c(b.strap), buckle: c(b.buckle), wrap: c(b.wrap), card: c(b.card), tape: c(b.tape), sleeve: c(b.sleeve), foam: c(b.foam) };
 }
 
 type Feedback = (text: string, bad: boolean) => void;
 const bump = () => useUi.getState().bump();
 
+/** performance.now() (s) of the last wrong-layer click; active pieces pulse harder for a moment after it */
+const nudge = { at: -10 };
+
+/** First not-yet-removed piece of the current layer under the pointer, nearest first. */
+function activeHit(kit: Kit, e: ThreeEvent<MouseEvent | PointerEvent>) {
+  const cur = currentLayer(kit);
+  if (!cur) return null;
+  for (const hit of e.intersections) {
+    for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) {
+      const id = o.userData.pieceId as number | undefined;
+      if (id === undefined) continue;
+      const p = kit.pieces.find((x) => x.id === id);
+      if (p && !p.removed && p.kind === cur) return p;
+      break;
+    }
+  }
+  return null;
+}
+
+/** Straps are thin; give them a fat invisible hit area so they're easy to click (and tap). */
+const HOVER = new THREE.Color('#3b82f6');
+const HIT_MAT = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
+function StrapHitbox({ piece }: { piece: Piece }) {
+  const { w: W, d: D, base: B, h: H } = KIT_CRATE;
+  const top = B + H, [axis, off] = piece.p, t = 0.2, s = 0.13;
+  const boxes: [number, number, number, number, number, number][] = axis === 0
+    ? [[0, top + 0.09, off, W + 0.25, s, t], [W / 2 + 0.07, B + H / 2, off, s, H + 0.2, t], [-W / 2 - 0.07, B + H / 2, off, s, H + 0.2, t]]
+    : [[off, top + 0.1, 0, t, s, D + 0.25], [off, B + H / 2, D / 2 + 0.07, t, H + 0.2, s], [off, B + H / 2, -D / 2 - 0.07, t, H + 0.2, s]];
+  return (
+    <>
+      {boxes.map(([x, y, z, w, h, d], i) => (
+        <mesh key={i} position={[x, y, z]} material={HIT_MAT}><boxGeometry args={[w, h, d]} /></mesh>
+      ))}
+    </>
+  );
+}
+
 /* ------------------------------ trash pieces ------------------------------- */
 function TrashPiece({ piece, kit, active, feedback }: { piece: Piece; kit: Kit; active: boolean; feedback: Feedback }) {
   const g = useRef<THREE.Group>(null);
   const mats = useMemo(cloneMats, []);
   const [gone, setGone] = useState(piece.removed);
-  const [hl, setHl] = useState(false);
+  const hl = useRef(false);
   const anim = useRef<{ t: number; v: THREE.Vector3; spin: THREE.Vector3 } | null>(null);
-
-  useEffect(() => {
-    for (const m of Object.values(mats) as THREE.MeshStandardMaterial[]) {
-      m.emissive.set(hl ? '#3b82f6' : '#000000');
-      m.emissiveIntensity = hl ? 0.45 : 0;
-    }
-  }, [hl, mats]);
+  const list = useMemo(() => Object.values(mats) as THREE.MeshStandardMaterial[], [mats]);
 
   useFrame((_, dt) => {
     if (gone || !g.current) return;
@@ -61,22 +91,44 @@ function TrashPiece({ piece, kit, active, feedback }: { piece: Piece; kit: Kit; 
             : piece.kind === 'wrap' ? new THREE.Vector3(0, 1.2, 0)
               : new THREE.Vector3(r() * 4, 3.5, r() * 4);
       anim.current = { t: 0, v, spin: new THREE.Vector3(r() * 6, r() * 6, r() * 6) };
-      setHl(false);
+      hl.current = false;
+      for (const m of list) {
+        m.transparent = true;
+        m.depthWrite = false;
+        m.needsUpdate = true;
+      }
     }
     const a = anim.current;
-    if (!a) return;
+    if (!a) {
+      // active layer breathes softly so the player can spot what's left (harder right after a wrong click)
+      const t = performance.now() / 1000, boost = Math.max(0, 1 - (t - nudge.at) / 1.4);
+      const ei = hl.current ? 0.45 : active ? 0.12 + (0.1 + boost * 0.35) * (0.5 + 0.5 * Math.sin(t * (4 + boost * 6))) : 0;
+      for (const m of list) {
+        // hover = blue; idle pulse brightens the piece in its own colour so straps stay yellow
+        if (hl.current) m.emissive.set(HOVER);
+        else m.emissive.copy(m.color);
+        m.emissiveIntensity = ei;
+      }
+      return;
+    }
     a.t += dt / 0.6;
     const k = Math.min(1, a.t);
     g.current.position.set(a.v.x * k, a.v.y * k - 2.5 * k * k * (piece.kind === 'wrap' ? 0 : 1), a.v.z * k);
     if (piece.kind === 'wrap') g.current.scale.setScalar(1 + k * 0.35);
     else g.current.rotation.set(a.spin.x * k, a.spin.y * k, a.spin.z * k);
-    for (const m of Object.values(mats) as THREE.MeshStandardMaterial[]) m.opacity = (piece.kind === 'wrap' ? 0.6 : 1) * (1 - k);
+    for (const m of list) {
+      m.opacity = (piece.kind === 'wrap' ? 0.6 : 1) * (1 - k);
+      m.emissiveIntensity = 0;
+    }
     if (a.t >= 1) setGone(true);
   });
 
   if (gone) return null;
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     if (e.delta > 8 || piece.removed) return;
+    // an outer piece in front of an active one shouldn't block the click: let it pass through
+    const target = activeHit(kit, e);
+    if (target && target !== piece) return;
     e.stopPropagation();
     const res = removePiece(kit.id, piece.id);
     if (res.ok) {
@@ -84,18 +136,33 @@ function TrashPiece({ piece, kit, active, feedback }: { piece: Piece; kit: Kit; 
       if (res.layerDone && !res.cleared) sfx('layer');
       bump();
     } else if (res.hint) {
-      sfx('deny');
-      feedback(res.hint, true);
+      if (res.reason === 'order') {
+        nudge.at = performance.now() / 1000;
+        sfx('click');
+        feedback(res.hint, false);
+      } else {
+        sfx('deny');
+        feedback(res.hint, true);
+      }
     }
   };
   return (
     <group
       ref={g}
+      userData={{ pieceId: piece.id }}
       onClick={onClick}
-      onPointerOver={(e) => { e.stopPropagation(); if (!piece.removed) { setHl(active); document.body.style.cursor = active ? 'pointer' : 'not-allowed'; } }}
-      onPointerOut={() => { setHl(false); document.body.style.cursor = ''; }}
+      onPointerOver={(e) => {
+        if (piece.removed) return;
+        const target = activeHit(kit, e);
+        if (target && target !== piece) return;
+        e.stopPropagation();
+        hl.current = active;
+        document.body.style.cursor = active ? 'pointer' : 'not-allowed';
+      }}
+      onPointerOut={() => { hl.current = false; document.body.style.cursor = ''; }}
     >
       <PieceGeom piece={piece} mats={mats} />
+      {piece.kind === 'strap' && <StrapHitbox piece={piece} />}
     </group>
   );
 }
@@ -128,6 +195,8 @@ function ClickPart({ part, kit, feedback }: { part: Part; kit: Kit; feedback: Fe
   const label = barcodeTexture(part.mat, tone);
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     if (e.delta > 8) return;
+    // aiming at dunnage just past a part's edge shouldn't count as touching the part
+    if (!scanning && activeHit(kit, e)) return;
     e.stopPropagation();
     if (scanning) {
       const r = scanPart(kit.id, part.id);

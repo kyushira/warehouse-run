@@ -104,7 +104,7 @@ export function PieceGeom({ piece, mats }: { piece: Piece; mats: PieceMats }) {
         return (
           <group>
             <mesh position={[0, top + 0.035, 0]} material={mats.card} castShadow receiveShadow><boxGeometry args={[W + 0.06, 0.07, D + 0.06]} /></mesh>
-            <mesh position={[0, top + 0.036, 0]} material={mats.tape}><boxGeometry args={[W + 0.07, 0.072, 0.14]} /></mesh>
+            <mesh position={[0, top + 0.037, 0]} material={mats.tape}><boxGeometry args={[W + 0.075, 0.075, 0.16]} /></mesh>
           </group>
         );
       return (
@@ -140,7 +140,7 @@ export const sharedPieceMats = (): PieceMats => ({
   buckle: mat(C.dark),
   wrap: baseWrapMat(),
   card: mat(C.card),
-  tape: mat(C.tape),
+  tape: mat(C.tape, { rough: 0.3 }),
   sleeve: mat(C.sleeve),
   foam: mat(C.foam, { rough: 0.35, emissive: '#e2e8f0', ei: 0.15 }),
 });
